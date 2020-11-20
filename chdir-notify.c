@@ -16,6 +16,7 @@ void chdir_notify_register(const char *name,
 			   void *data)
 {
 	struct chdir_notify_entry *e = xmalloc(sizeof(*e));
+	UNLEAK(e);
 	e->name = name;
 	e->cb = cb;
 	e->data = data;
