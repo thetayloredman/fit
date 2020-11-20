@@ -1917,4 +1917,140 @@ test_expect_success '--replace-all does not invent newlines' '
 	test_cmp expect .git/config
 '
 
+test_expect_success 'set all config with value_regex' '
+	q_to_tab >initial <<-\EOF &&
+	[abc]
+	Qkey = one
+	EOF
+
+	cp initial .git/config &&
+	git config abc.key two a+ &&
+	q_to_tab >expect <<-\EOF &&
+	[abc]
+	Qkey = one
+	Qkey = two
+	EOF
+	test_cmp expect .git/config &&
+
+	test_must_fail git config abc.key three o+ 2>err &&
+	test_i18ngrep "has multiple values" err &&
+	git config abc.key three a+ &&
+	q_to_tab >expect <<-\EOF &&
+	[abc]
+	Qkey = one
+	Qkey = two
+	Qkey = three
+	EOF
+	test_cmp expect .git/config &&
+
+	cp initial .git/config &&
+	git config abc.key three o+ &&
+	q_to_tab >expect <<-\EOF &&
+	[abc]
+	Qkey = three
+	EOF
+	test_cmp expect .git/config
+'
+
+test_expect_success '--replace-all and value_regex' '
+	q_to_tab >.git/config <<-\EOF &&
+	[abc]
+	Qkey = one
+	Qkey = two
+	Qkey = three
+	EOF
+	q_to_tab >expect <<-\EOF &&
+	[abc]
+	Qkey = four
+	Qkey = three
+	EOF
+	git config --replace-all abc.key four "o+" &&
+	test_cmp expect .git/config
+'
+
+test_expect_success 'refuse --literal-value for incompatible actions' '
+	git config dev.null bogus &&
+	test_must_fail git config --literal-value --add dev.null bogus &&
+	test_must_fail git config --literal-value --get-urlmatch dev.null bogus &&
+	test_must_fail git config --literal-value --get-urlmatch dev.null bogus &&
+	test_must_fail git config --literal-value --rename-section dev null &&
+	test_must_fail git config --literal-value --remove-section dev &&
+	test_must_fail git config --literal-value --list &&
+	test_must_fail git config --literal-value --get-color dev.null &&
+	test_must_fail git config --literal-value --get-colorbool dev.null &&
+	test_must_fail git config --literal-value --edit
+'
+
+test_expect_success '--literal-value uses exact string matching' '
+	GLOB="a+b*c?d[e]f.g" &&
+	q_to_tab >initial <<-EOF &&
+	[literal]
+	Qtest = $GLOB
+	EOF
+
+	cp initial .git/config &&
+	git config literal.test bogus "$GLOB" &&
+	q_to_tab >expect <<-EOF &&
+	[literal]
+	Qtest = $GLOB
+	Qtest = bogus
+	EOF
+	test_cmp expect .git/config &&
+	cp initial .git/config &&
+	git config --literal-value literal.test bogus "$GLOB" &&
+	q_to_tab >expect <<-EOF &&
+	[literal]
+	Qtest = bogus
+	EOF
+	test_cmp expect .git/config &&
+
+	cp initial .git/config &&
+	test_must_fail git config --unset literal.test "$GLOB" &&
+	git config --literal-value --unset literal.test "$GLOB" &&
+	test_must_fail git config literal.test &&
+
+	cp initial .git/config &&
+	test_must_fail git config --unset-all literal.test "$GLOB" &&
+	git config --literal-value --unset-all literal.test "$GLOB" &&
+	test_must_fail git config literal.test &&
+
+	cp initial .git/config &&
+	git config --replace-all literal.test bogus "$GLOB" &&
+	q_to_tab >expect <<-EOF &&
+	[literal]
+	Qtest = $GLOB
+	Qtest = bogus
+	EOF
+	test_cmp expect .git/config &&
+
+	cp initial .git/config &&
+	git config --replace-all literal.test bogus "$GLOB" &&
+	git config --literal-value --replace-all literal.test bogus "$GLOB" &&
+	test_cmp_config bogus literal.test
+'
+
+test_expect_success '--get and --get-all with --literal-value' '
+	GLOB="a+b*c?d[e]f.g" &&
+	q_to_tab >.git/config <<-EOF &&
+	[literal]
+	Qtest = bogus
+	Qtest = $GLOB
+	EOF
+
+	git config --get literal.test bogus &&
+	test_must_fail git config --get literal.test "$GLOB" &&
+	git config --get --literal-value literal.test "$GLOB" &&
+	test_must_fail git config --get --literal-value literal.test non-existent &&
+
+	git config --get-all literal.test bogus &&
+	test_must_fail git config --get-all literal.test "$GLOB" &&
+	git config --get-all --literal-value literal.test "$GLOB" &&
+	test_must_fail git config --get-all --literal-value literal.test non-existent &&
+
+	git config --get-regexp literal+ bogus &&
+	test_must_fail git config  --get-regexp literal+ "$GLOB" &&
+	git config --get-regexp --literal-value literal+ "$GLOB" &&
+	test_must_fail git config --get-regexp --literal-value literal+ non-existent
+'
+
 test_done

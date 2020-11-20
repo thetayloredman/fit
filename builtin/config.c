@@ -14,6 +14,7 @@ static const char *const builtin_config_usage[] = {
 
 static char *key;
 static regex_t *key_regexp;
+static const char *value_regex;
 static regex_t *regexp;
 static int show_keys;
 static int omit_values;
@@ -34,6 +35,7 @@ static int respect_includes_opt = -1;
 static struct config_options config_options;
 static int show_origin;
 static int show_scope;
+static int literal;
 
 #define ACTION_GET (1<<0)
 #define ACTION_GET_ALL (1<<1)
@@ -51,6 +53,16 @@ static int show_scope;
 #define ACTION_GET_COLOR (1<<13)
 #define ACTION_GET_COLORBOOL (1<<14)
 #define ACTION_GET_URLMATCH (1<<15)
+
+#define ACTION_LITERAL_ALLOWED (\
+	ACTION_GET |\
+	ACTION_GET_ALL |\
+	ACTION_GET_REGEXP |\
+	ACTION_REPLACE_ALL |\
+	ACTION_UNSET |\
+	ACTION_UNSET_ALL |\
+	ACTION_SET_ALL\
+)
 
 /*
  * The actions "ACTION_LIST | ACTION_GET_*" which may produce more than
@@ -144,6 +156,7 @@ static struct option builtin_config_options[] = {
 	OPT_BIT(0, "rename-section", &actions, N_("rename section: old-name new-name"), ACTION_RENAME_SECTION),
 	OPT_BIT(0, "remove-section", &actions, N_("remove a section: name"), ACTION_REMOVE_SECTION),
 	OPT_BIT('l', "list", &actions, N_("list all"), ACTION_LIST),
+	OPT_BOOL(0, "literal-value", &literal, N_("use literal equality when matching values")),
 	OPT_BIT('e', "edit", &actions, N_("open an editor"), ACTION_EDIT),
 	OPT_BIT(0, "get-color", &actions, N_("find the color configured: slot [default]"), ACTION_GET_COLOR),
 	OPT_BIT(0, "get-colorbool", &actions, N_("find the color setting: slot [stdout-is-tty]"), ACTION_GET_COLORBOOL),
@@ -296,6 +309,8 @@ static int collect_config(const char *key_, const char *value_, void *cb)
 		return 0;
 	if (use_key_regexp && regexec(key_regexp, key_, 0, NULL, 0))
 		return 0;
+	if (literal && strcmp(value_regex, (value_?value_:"")))
+		return 0;
 	if (regexp != NULL &&
 	    (do_not_match ^ !!regexec(regexp, (value_?value_:""), 0, NULL, 0)))
 		return 0;
@@ -306,7 +321,7 @@ static int collect_config(const char *key_, const char *value_, void *cb)
 	return format_config(&values->items[values->nr++], key_, value_);
 }
 
-static int get_value(const char *key_, const char *regex_)
+static int get_value(const char *key_, const char *regex_, int flags)
 {
 	int ret = CONFIG_GENERIC_ERROR;
 	struct strbuf_list values = {NULL};
@@ -343,7 +358,9 @@ static int get_value(const char *key_, const char *regex_)
 		}
 	}
 
-	if (regex_) {
+	if (regex_ && (flags & CONFIG_FLAGS_LITERAL_VALUE))
+		value_regex = regex_;
+	else if (regex_) {
 		if (regex_[0] == '!') {
 			do_not_match = 1;
 			regex_++;
@@ -631,6 +648,7 @@ int cmd_config(int argc, const char **argv, const char *prefix)
 {
 	int nongit = !startup_info->have_repository;
 	char *value;
+	int flags = 0;
 
 	given_config_source.file = xstrdup_or_null(getenv(CONFIG_ENVIRONMENT));
 
@@ -766,6 +784,13 @@ int cmd_config(int argc, const char **argv, const char *prefix)
 		usage_builtin_config();
 	}
 
+	if (literal && !(actions & ACTION_LITERAL_ALLOWED)) {
+		error(_("--literal only applies with 'value_regex'"));
+		usage_builtin_config();
+	}
+	if (literal)
+		flags = CONFIG_FLAGS_LITERAL_VALUE;
+
 	if (actions & PAGING_ACTIONS)
 		setup_auto_pager("config", 1);
 
@@ -827,7 +852,8 @@ int cmd_config(int argc, const char **argv, const char *prefix)
 		value = normalize_value(argv[0], argv[1]);
 		UNLEAK(value);
 		return git_config_set_multivar_in_file_gently(given_config_source.file,
-							      argv[0], value, argv[2], 0);
+							      argv[0], value, argv[2],
+							      flags);
 	}
 	else if (actions == ACTION_ADD) {
 		check_write();
@@ -836,7 +862,8 @@ int cmd_config(int argc, const char **argv, const char *prefix)
 		UNLEAK(value);
 		return git_config_set_multivar_in_file_gently(given_config_source.file,
 							      argv[0], value,
-							      CONFIG_REGEX_NONE, 0);
+							      CONFIG_REGEX_NONE,
+							      flags);
 	}
 	else if (actions == ACTION_REPLACE_ALL) {
 		check_write();
@@ -844,23 +871,24 @@ int cmd_config(int argc, const char **argv, const char *prefix)
 		value = normalize_value(argv[0], argv[1]);
 		UNLEAK(value);
 		return git_config_set_multivar_in_file_gently(given_config_source.file,
-							      argv[0], value, argv[2], 1);
+							      argv[0], value, argv[2],
+							      flags | CONFIG_FLAGS_MULTI_REPLACE);
 	}
 	else if (actions == ACTION_GET) {
 		check_argc(argc, 1, 2);
-		return get_value(argv[0], argv[1]);
+		return get_value(argv[0], argv[1], flags);
 	}
 	else if (actions == ACTION_GET_ALL) {
 		do_all = 1;
 		check_argc(argc, 1, 2);
-		return get_value(argv[0], argv[1]);
+		return get_value(argv[0], argv[1], flags);
 	}
 	else if (actions == ACTION_GET_REGEXP) {
 		show_keys = 1;
 		use_key_regexp = 1;
 		do_all = 1;
 		check_argc(argc, 1, 2);
-		return get_value(argv[0], argv[1]);
+		return get_value(argv[0], argv[1], flags);
 	}
 	else if (actions == ACTION_GET_URLMATCH) {
 		check_argc(argc, 2, 2);
@@ -871,7 +899,8 @@ int cmd_config(int argc, const char **argv, const char *prefix)
 		check_argc(argc, 1, 2);
 		if (argc == 2)
 			return git_config_set_multivar_in_file_gently(given_config_source.file,
-								      argv[0], NULL, argv[1], 0);
+								      argv[0], NULL, argv[1],
+								      flags);
 		else
 			return git_config_set_in_file_gently(given_config_source.file,
 							     argv[0], NULL);
@@ -880,7 +909,8 @@ int cmd_config(int argc, const char **argv, const char *prefix)
 		check_write();
 		check_argc(argc, 1, 2);
 		return git_config_set_multivar_in_file_gently(given_config_source.file,
-							      argv[0], NULL, argv[1], 1);
+							      argv[0], NULL, argv[1],
+							      flags | CONFIG_FLAGS_MULTI_REPLACE);
 	}
 	else if (actions == ACTION_RENAME_SECTION) {
 		int ret;
