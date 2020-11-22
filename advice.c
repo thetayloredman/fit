@@ -247,15 +247,15 @@ void list_config_advices(struct string_list *list, const char *prefix)
 int error_resolve_conflict(const char *me)
 {
 	if (!strcmp(me, "cherry-pick"))
-		error(_("Cherry-picking is not possible because you have unmerged files."));
+		error(_("BRUH! Cherry-picking is not possible because you have unmerged files."));
 	else if (!strcmp(me, "commit"))
-		error(_("Committing is not possible because you have unmerged files."));
+		error(_("OwO Committing is not possible because you have unmerged files."));
 	else if (!strcmp(me, "merge"))
-		error(_("Merging is not possible because you have unmerged files."));
+		error(_("OwO Merging is not possible because you have unmerged files."));
 	else if (!strcmp(me, "pull"))
-		error(_("Pulling is not possible because you have unmerged files."));
+		error(_("OwO Pulling is not possible because you have unmerged files."));
 	else if (!strcmp(me, "revert"))
-		error(_("Reverting is not possible because you have unmerged files."));
+		error(_("OwO Reverting is not possible because you have unmerged files."));
 	else
 		error(_("It is not possible to %s because you have unmerged files."),
 			me);
@@ -265,7 +265,7 @@ int error_resolve_conflict(const char *me)
 		 * Message used both when 'git commit' fails and when
 		 * other commands doing a merge do.
 		 */
-		advise(_("Fix them up in the work tree, and then use 'git add/rm <file>'\n"
+		advise(_("OwO you can fix them up in the work tree, and then use 'git add/rm <file>'\n"
 			 "as appropriate to mark resolution and make a commit."));
 	return -1;
 }
@@ -273,36 +273,36 @@ int error_resolve_conflict(const char *me)
 void NORETURN die_resolve_conflict(const char *me)
 {
 	error_resolve_conflict(me);
-	die(_("Exiting because of an unresolved conflict."));
+	die(_("BRUH! Exiting because of an unresolved conflict. Go do your job first."));
 }
 
 void NORETURN die_conclude_merge(void)
 {
-	error(_("You have not concluded your merge (MERGE_HEAD exists)."));
+	error(_("BRUH! You have not finished your merge (MERGE_HEAD exists)."));
 	if (advice_resolve_conflict)
-		advise(_("Please, commit your changes before merging."));
-	die(_("Exiting because of unfinished merge."));
+		advise(_("Please commit your changes before merging. You've failed us."));
+	die(_("Exiting because of OwO unfinished mewge."));
 }
 
 void detach_advice(const char *new_name)
 {
 	const char *fmt =
-	_("Note: switching to '%s'.\n"
+	_("OwO What's this? Moving over to to '%s'.\n"
 	"\n"
-	"You are in 'detached HEAD' state. You can look around, make experimental\n"
-	"changes and commit them, and you can discard any commits you make in this\n"
-	"state without impacting any branches by switching back to a branch.\n"
+	"You have chopped off your head. You can('t) look around (because you have no\n"
+	"head),make experimental changes and commit them, and you can discard any of\n"
+	"the trash code you make here by switching back to a branch. OwO\n"
 	"\n"
-	"If you want to create a new branch to retain commits you create, you may\n"
-	"do so (now or later) by using -c with the switch command. Example:\n"
+	"If you want to create a new branch and keep all of your messy code, run this\n"
+	"(now or never) by doing this:\n"
 	"\n"
 	"  git switch -c <new-branch-name>\n"
 	"\n"
-	"Or undo this operation with:\n"
+	"Or, go to the ER and get a head back by doing:\n"
 	"\n"
 	"  git switch -\n"
 	"\n"
-	"Turn off this advice by setting config variable advice.detachedHead to false\n\n");
+	"You may (not) disable this advice by setting config advice.detachedHead to false\n\n");
 
 	fprintf(stderr, fmt, new_name);
 }
