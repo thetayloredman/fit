@@ -257,7 +257,7 @@ int error_resolve_conflict(const char *me)
 	else if (!strcmp(me, "revert"))
 		error(_("OwO Reverting is not possible because you have unmerged files."));
 	else
-		error(_("It is not possible to %s because you have unmerged files."),
+		error(_("OwO It is not possible to %s because you have unmerged files."),
 			me);
 
 	if (advice_resolve_conflict)
