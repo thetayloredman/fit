@@ -31,21 +31,21 @@ static struct patch_mode patch_mode_add = {
 	.apply_args = { "--cached", NULL },
 	.apply_check_args = { "--cached", NULL },
 	.prompt_mode = {
-		N_("Stage mode change [y,n,q,a,d%s,?]? "),
-		N_("Stage deletion [y,n,q,a,d%s,?]? "),
-		N_("Stage addition [y,n,q,a,d%s,?]? "),
-		N_("Stage this hunk [y,n,q,a,d%s,?]? ")
+		N_("Wanna stage mode change? [y,n,q,a,d%s,?] "),
+		N_("Wanna stage deletion? [y,n,q,a,d%s,?] "),
+		N_("Wanna stage addition? [y,n,q,a,d%s,?] "),
+		N_("Wanna stage this hunk? [y,n,q,a,d%s,?] ")
 	},
-	.edit_hunk_hint = N_("If the patch applies cleanly, the edited hunk "
+	.edit_hunk_hint = N_("Woah! If the patch applies cleanly, the edited hunk "
 			     "will immediately be marked for staging."),
 	.help_patch_text =
-		N_("y - stage this hunk\n"
-		   "n - do not stage this hunk\n"
+		N_("y - stage this hunk | much owo\n"
+		   "n - do not stage this hunk | not owo\n"
 		   "q - quit; do not stage this hunk or any of the remaining "
-			"ones\n"
-		   "a - stage this hunk and all later hunks in the file\n"
+			"ones | I GIVE UP\n"
+		   "a - stage this hunk and all later hunks in the file | lol\n"
 		   "d - do not stage this hunk or any of the later hunks in "
-			"the file\n")
+			"the file | hehe owo\n")
 };
 
 static struct patch_mode patch_mode_stash = {
