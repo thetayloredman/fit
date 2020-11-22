@@ -1080,7 +1080,7 @@ int run_add_i(struct repository *r, const struct pathspec *ps)
 	struct add_i_state s = { NULL };
 	struct print_command_item_data data = { "[", "]" };
 	struct list_and_choose_options main_loop_opts = {
-		{ 4, N_("*** Commands ***"), print_command_item, &data },
+		{ 4, N_("*** OwO Commands ***"), print_command_item, &data },
 		N_("What now"), SINGLETON | IMMEDIATE, command_prompt_help
 	};
 	struct {
