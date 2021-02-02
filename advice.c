@@ -1,3 +1,7 @@
+/*
+ * February 2 2020 - Modified by BadBoyHaloCat
+ */
+
 #include "cache.h"
 #include "config.h"
 #include "color.h"
@@ -289,18 +293,17 @@ void detach_advice(const char *new_name)
 	const char *fmt =
 	_("Note: switching to '%s'.\n"
 	"\n"
-	"You are in 'detached HEAD' state. You can look around, make experimental\n"
-	"changes and commit them, and you can discard any commits you make in this\n"
-	"state without impacting any branches by switching back to a branch.\n"
+	"You have taken off your fursuit head. You can finally look around, make\n"
+	"experimental changes and commit them, and you can discard any changes\n"
+	"you make without impacting any branches by putting your head back on.\n"
 	"\n"
-	"If you want to create a new branch to retain commits you create, you may\n"
-	"do so (now or later) by using -c with the switch command. Example:\n"
+	"If you want to create a new branch to retain your hard, hard work, run\n"
 	"\n"
-	"  git switch -c <new-branch-name>\n"
+	"  fit switch -c <new-branch-name>\n"
 	"\n"
-	"Or undo this operation with:\n"
+	"Or put your head back on now:\n"
 	"\n"
-	"  git switch -\n"
+	"  fit switch -\n"
 	"\n"
 	"Turn off this advice by setting config variable advice.detachedHead to false\n\n");
 
