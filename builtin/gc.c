@@ -54,7 +54,6 @@ static const char *prune_worktrees_expire = "3.months.ago";
 static unsigned long big_pack_threshold;
 static unsigned long max_delta_cache_size = DEFAULT_DELTA_CACHE_SIZE;
 
-static struct strvec pack_refs_cmd = STRVEC_INIT;
 static struct strvec reflog = STRVEC_INIT;
 static struct strvec repack = STRVEC_INIT;
 static struct strvec prune = STRVEC_INIT;
@@ -161,6 +160,15 @@ static void gc_config(void)
 	git_config_get_ulong("pack.deltacachesize", &max_delta_cache_size);
 
 	git_config(git_default_config, NULL);
+}
+
+struct maintenance_run_opts;
+static int maintenance_task_pack_refs(MAYBE_UNUSED struct maintenance_run_opts *opts)
+{
+	struct strvec pack_refs_cmd = STRVEC_INIT;
+	strvec_pushl(&pack_refs_cmd, "pack-refs", "--all", "--prune", NULL);
+
+	return run_command_v_opt(pack_refs_cmd.v, RUN_GIT_CMD);
 }
 
 static int too_many_loose_objects(void)
@@ -518,8 +526,8 @@ static void gc_before_repack(void)
 	if (done++)
 		return;
 
-	if (pack_refs && run_command_v_opt(pack_refs_cmd.v, RUN_GIT_CMD))
-		die(FAILED_RUN, pack_refs_cmd.v[0]);
+	if (pack_refs && maintenance_task_pack_refs(NULL))
+		die(FAILED_RUN, "pack-refs");
 
 	if (prune_reflogs && run_command_v_opt(reflog.v, RUN_GIT_CMD))
 		die(FAILED_RUN, reflog.v[0]);
@@ -556,7 +564,6 @@ int cmd_gc(int argc, const char **argv, const char *prefix)
 	if (argc == 2 && !strcmp(argv[1], "-h"))
 		usage_with_options(builtin_gc_usage, builtin_gc_options);
 
-	strvec_pushl(&pack_refs_cmd, "pack-refs", "--all", "--prune", NULL);
 	strvec_pushl(&reflog, "reflog", "expire", "--all", NULL);
 	strvec_pushl(&repack, "repack", "-d", "-l", NULL);
 	strvec_pushl(&prune, "prune", "--expire", NULL);
@@ -769,7 +776,7 @@ static int dfs_on_ref(const char *refname,
 	struct commit_list *stack = NULL;
 	struct commit *commit;
 
-	if (!peel_ref(refname, &peeled))
+	if (!peel_iterated_oid(oid, &peeled))
 		oid = &peeled;
 	if (oid_object_info(the_repository, oid, NULL) != OBJ_COMMIT)
 		return 0;
@@ -896,6 +903,12 @@ static int maintenance_task_prefetch(struct maintenance_run_opts *opts)
 	int result = 0;
 	struct string_list_item *item;
 	struct string_list remotes = STRING_LIST_INIT_DUP;
+
+	git_config_set_multivar_gently("log.excludedecoration",
+					"refs/prefetch/",
+					"refs/prefetch/",
+					CONFIG_FLAGS_FIXED_VALUE |
+					CONFIG_FLAGS_MULTI_REPLACE);
 
 	if (for_each_remote(append_remote, &remotes)) {
 		error(_("failed to fill remotes"));
@@ -1218,6 +1231,7 @@ enum maintenance_task_label {
 	TASK_INCREMENTAL_REPACK,
 	TASK_GC,
 	TASK_COMMIT_GRAPH,
+	TASK_PACK_REFS,
 
 	/* Leave as final value */
 	TASK__COUNT
@@ -1248,6 +1262,11 @@ static struct maintenance_task tasks[] = {
 		"commit-graph",
 		maintenance_task_commit_graph,
 		should_write_commit_graph,
+	},
+	[TASK_PACK_REFS] = {
+		"pack-refs",
+		maintenance_task_pack_refs,
+		NULL,
 	},
 };
 
@@ -1333,6 +1352,8 @@ static void initialize_maintenance_strategy(void)
 		tasks[TASK_INCREMENTAL_REPACK].schedule = SCHEDULE_DAILY;
 		tasks[TASK_LOOSE_OBJECTS].enabled = 1;
 		tasks[TASK_LOOSE_OBJECTS].schedule = SCHEDULE_DAILY;
+		tasks[TASK_PACK_REFS].enabled = 1;
+		tasks[TASK_PACK_REFS].schedule = SCHEDULE_WEEKLY;
 	}
 }
 
@@ -1440,11 +1461,23 @@ static int maintenance_run(int argc, const char **argv, const char *prefix)
 	return maintenance_run_tasks(&opts);
 }
 
+static char *get_maintpath(void)
+{
+	struct strbuf sb = STRBUF_INIT;
+	const char *p = the_repository->worktree ?
+		the_repository->worktree : the_repository->gitdir;
+
+	strbuf_realpath(&sb, p, 1);
+	return strbuf_detach(&sb, NULL);
+}
+
 static int maintenance_register(void)
 {
+	int rc;
 	char *config_value;
 	struct child_process config_set = CHILD_PROCESS_INIT;
 	struct child_process config_get = CHILD_PROCESS_INIT;
+	char *maintpath = get_maintpath();
 
 	/* Disable foreground maintenance */
 	git_config_set("maintenance.auto", "false");
@@ -1457,40 +1490,44 @@ static int maintenance_register(void)
 
 	config_get.git_cmd = 1;
 	strvec_pushl(&config_get.args, "config", "--global", "--get",
-		     "--fixed-value", "maintenance.repo",
-		     the_repository->worktree ? the_repository->worktree
-					      : the_repository->gitdir,
-			 NULL);
+		     "--fixed-value", "maintenance.repo", maintpath, NULL);
 	config_get.out = -1;
 
-	if (start_command(&config_get))
-		return error(_("failed to run 'git config'"));
+	if (start_command(&config_get)) {
+		rc = error(_("failed to run 'git config'"));
+		goto done;
+	}
 
 	/* We already have this value in our config! */
-	if (!finish_command(&config_get))
-		return 0;
+	if (!finish_command(&config_get)) {
+		rc = 0;
+		goto done;
+	}
 
 	config_set.git_cmd = 1;
 	strvec_pushl(&config_set.args, "config", "--add", "--global", "maintenance.repo",
-		     the_repository->worktree ? the_repository->worktree
-					      : the_repository->gitdir,
-		     NULL);
+		     maintpath, NULL);
 
-	return run_command(&config_set);
+	rc = run_command(&config_set);
+
+done:
+	free(maintpath);
+	return rc;
 }
 
 static int maintenance_unregister(void)
 {
+	int rc;
 	struct child_process config_unset = CHILD_PROCESS_INIT;
+	char *maintpath = get_maintpath();
 
 	config_unset.git_cmd = 1;
 	strvec_pushl(&config_unset.args, "config", "--global", "--unset",
-		     "--fixed-value", "maintenance.repo",
-		     the_repository->worktree ? the_repository->worktree
-					      : the_repository->gitdir,
-		     NULL);
+		     "--fixed-value", "maintenance.repo", maintpath, NULL);
 
-	return run_command(&config_unset);
+	rc = run_command(&config_unset);
+	free(maintpath);
+	return rc;
 }
 
 static const char *get_frequency(enum schedule_priority schedule)

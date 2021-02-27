@@ -8,7 +8,7 @@ GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME=main
 export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
 
 . ./test-lib.sh
-. "$TEST_DIRECTORY"/diff-lib.sh ;# test-lib chdir's into trash
+. "$TEST_DIRECTORY"/lib-diff.sh ;# test-lib chdir's into trash
 
 verify_packs () {
 	for p in .git/objects/pack/*.pack
@@ -1632,7 +1632,10 @@ test_expect_success 'O: blank lines not necessary after other commands' '
 	INPUT_END
 
 	git fast-import <input &&
-	test 8 = $(find .git/objects/pack -type f | grep -v multi-pack-index | wc -l) &&
+	ls -la .git/objects/pack/pack-*.pack >packlist &&
+	ls -la .git/objects/pack/pack-*.pack >idxlist &&
+	test_line_count = 4 idxlist &&
+	test_line_count = 4 packlist &&
 	test $(git rev-parse refs/tags/O3-2nd) = $(git rev-parse O3^) &&
 	git log --reverse --pretty=oneline O3 | sed s/^.*z// >actual &&
 	test_cmp expect actual

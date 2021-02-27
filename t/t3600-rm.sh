@@ -243,7 +243,7 @@ test_expect_success 'refresh index before checking if it is up-to-date' '
 	test_path_is_missing frotz/nitfol
 '
 
-test_expect_success 'choking "git rm" should not let it die with cruft' '
+choke_git_rm_setup() {
 	git reset -q --hard &&
 	test_when_finished "rm -f .git/index.lock && git reset -q --hard" &&
 	i=0 &&
@@ -252,9 +252,21 @@ test_expect_success 'choking "git rm" should not let it die with cruft' '
 	do
 		echo "100644 $hash 0	some-file-$i"
 		i=$(( $i + 1 ))
-	done | git update-index --index-info &&
+	done | git update-index --index-info
+}
+
+test_expect_success 'choking "git rm" should not let it die with cruft (induce SIGPIPE)' '
+	choke_git_rm_setup &&
 	# git command is intentionally placed upstream of pipe to induce SIGPIPE
 	git rm -n "some-file-*" | : &&
+	test_path_is_missing .git/index.lock
+'
+
+
+test_expect_success !MINGW 'choking "git rm" should not let it die with cruft (induce and check SIGPIPE)' '
+	choke_git_rm_setup &&
+	OUT=$( ((trap "" PIPE; git rm -n "some-file-*"; echo $? 1>&3) | :) 3>&1 ) &&
+	test_match_signal 13 "$OUT" &&
 	test_path_is_missing .git/index.lock
 '
 
@@ -442,7 +454,7 @@ test_expect_success 'rm issues a warning when section is not found in .gitmodule
 	git add .gitmodules &&
 	echo "warning: Could not find section in .gitmodules where path=submod" >expect.err &&
 	git rm submod >actual 2>actual.err &&
-	test_i18ncmp expect.err actual.err &&
+	test_cmp expect.err actual.err &&
 	test_path_is_missing submod &&
 	test_path_is_missing submod/.git &&
 	git status -s -uno >actual &&
@@ -812,7 +824,7 @@ test_expect_success 'rm files with different staged content' '
 	echo content1 >foo.txt &&
 	echo content1 >bar.txt &&
 	test_must_fail git rm foo.txt bar.txt 2>actual &&
-	test_i18ncmp expect actual
+	test_cmp expect actual
 '
 
 test_expect_success 'rm files with different staged content without hints' '
@@ -825,7 +837,7 @@ test_expect_success 'rm files with different staged content without hints' '
 	echo content2 >foo.txt &&
 	echo content2 >bar.txt &&
 	test_must_fail git -c advice.rmhints=false rm foo.txt bar.txt 2>actual &&
-	test_i18ncmp expect actual
+	test_cmp expect actual
 '
 
 test_expect_success 'rm file with local modification' '
@@ -837,7 +849,7 @@ test_expect_success 'rm file with local modification' '
 	git commit -m "testing rm 3" &&
 	echo content3 >foo.txt &&
 	test_must_fail git rm foo.txt 2>actual &&
-	test_i18ncmp expect actual
+	test_cmp expect actual
 '
 
 test_expect_success 'rm file with local modification without hints' '
@@ -847,7 +859,7 @@ test_expect_success 'rm file with local modification without hints' '
 	EOF
 	echo content4 >bar.txt &&
 	test_must_fail git -c advice.rmhints=false rm bar.txt 2>actual &&
-	test_i18ncmp expect actual
+	test_cmp expect actual
 '
 
 test_expect_success 'rm file with changes in the index' '
@@ -860,7 +872,7 @@ test_expect_success 'rm file with changes in the index' '
 	echo content5 >foo.txt &&
 	git add foo.txt &&
 	test_must_fail git rm foo.txt 2>actual &&
-	test_i18ncmp expect actual
+	test_cmp expect actual
 '
 
 test_expect_success 'rm file with changes in the index without hints' '
@@ -869,7 +881,7 @@ test_expect_success 'rm file with changes in the index without hints' '
 	    foo.txt
 	EOF
 	test_must_fail git -c advice.rmhints=false rm foo.txt 2>actual &&
-	test_i18ncmp expect actual
+	test_cmp expect actual
 '
 
 test_expect_success 'rm files with two different errors' '
@@ -888,7 +900,7 @@ test_expect_success 'rm files with two different errors' '
 	echo content6 >bar1.txt &&
 	git add bar1.txt &&
 	test_must_fail git rm bar1.txt foo1.txt 2>actual &&
-	test_i18ncmp expect actual
+	test_cmp expect actual
 '
 
 test_expect_success 'rm empty string should fail' '
